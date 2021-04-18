@@ -1,0 +1,705 @@
+<!DOCTYPE html>
+
+<head>
+    <title>Data Visualization</title>
+    <meta charset="utf-8">
+    <script type="text/javascript" src="/lib/d3.v5.min.js"></script>
+    <script type="text/javascript" src="/lib/d3-dsv.min.js"></script>
+
+    <style>
+        #container {
+            display: flex;
+            flex-wrap: wrap;
+        }
+
+        #menu {
+            display: inline;
+            width: 100%;
+            /*border:1px solid black;*/
+            /*padding: 1%;*/
+        }
+
+        #nation {
+            display: inline;
+            padding-left: 1%;
+        }
+    </style>
+</head>
+
+<body>
+    <p>
+        Select a field:
+        <select id="dropdown"></select>
+    </p>
+    <p>
+        Select a company:
+        <select id="dropdownCompany"></select>
+    </p>
+    <p>
+        Select a sentiment marker:
+        <select id="dropdownSentiment"></select>
+    </p>
+    <div id="container">
+        <div id="menu"></div>
+    </div>
+    <div id="containerSentiment">
+    </div>
+    <script>
+
+        //-----------------------------DATA-----------------------------//
+        const company = ["AAPL", "AMZN", "BABA", "DIS", "FB", "GME", "MSFT", "NTFX", "NVDA", "T", "TSLA", "V", "WMT"];
+        const fields = ["open", "low", "high", "close", "volume"];
+        const sentimentMarkers = ["NLP", "Number of posts per week"]
+        const timeConv = d3.timeParse("%Y-%m-%d");
+        const files = ["/stockData_csv/AAPL.csv",
+            "/stockData_csv/AMZN.csv",
+            "/stockData_csv/BABA.csv",
+            "/stockData_csv/DIS.csv",
+            "/stockData_csv/FB.csv",
+            "/stockData_csv/GME.csv",
+            "/stockData_csv/MSFT.csv",
+            "/stockData_csv/NFLX.csv",
+            "/stockData_csv/NVDA.csv",
+            "/stockData_csv/T.csv",
+            "/stockData_csv/TSLA.csv",
+            "/stockData_csv/V.csv",
+            "/stockData_csv/WMT.csv",
+            "sentiment_results/AAPL_week.csv",
+            "sentiment_results/AMZN_week.csv",
+            "sentiment_results/BABA_week.csv",
+            "sentiment_results/DIS_week.csv",
+            "sentiment_results/FB_week.csv",
+            "sentiment_results/GME_week.csv",
+            "sentiment_results/MSFT_week.csv",
+            "sentiment_results/NTFX_week.csv",
+            "sentiment_results/NVDA_week.csv",
+            "sentiment_results/T_week.csv",
+            "sentiment_results/TSLA_week.csv",
+            "sentiment_results/V_week.csv",
+            "sentiment_results/WMT_week.csv",
+        ]
+
+        Promise.all(files.map(url => d3.csv(url)))
+            .then(function (files) {
+                var data = [];
+                for (i = 0; i < company.length; i++) {
+                    var fileComp = files[i].map(function (d) {
+                        return {
+                            date: timeConv(d.Date),
+                            open: +d.Open,
+                            low: +d.Low,
+                            high: +d.High,
+                            close: +d.Close,
+                            volume: +d.Volume,
+                            company: company[i]
+                        };
+                    });
+                    fileComp.forEach(element => {
+                        data.push(element);
+                    });
+                }
+                // Loading Sentiments csv
+                // var dataSentimentWeek = [];
+                // for (i = 0; i < company.length; i++) {
+                //     var fileComp = files[i + company.length].map(function (d) {
+                //         if (d.positive) { // if not null
+                //             return {
+                //                 date: timeConv(d.date_week),
+                //                 averageSentiment: +d.positive, // cast null => 0 !!!
+                //                 numberPosts: +d.created_utc,
+                //                 company: company[i]
+                //             };
+                //         };
+                //         return {
+                //             date: timeConv(d.date_week),
+                //             numberPosts: +d.created_utc,
+                //             company: company[i]
+                //         };
+                //     });
+                //     fileComp.forEach(element => {
+                //         dataSentimentWeek.push(element);
+                //     });
+                // }
+
+                var dataSentimentWeek = [];
+                for (i = 0; i < company.length; i++) {
+                    var fileComp = files[i + company.length].map(function (d) {
+                        if (d.positive) { // if not null
+                            return {
+                                date: timeConv(d.date_week),
+                                averageSentiment: +d.positive, // cast null => 0 !!!
+                                numberPosts: +d.created_utc,
+                                company: company[i]
+                            };
+                        };
+                        return {
+                            date: timeConv(d.date_week),
+                            averageSentiment: "",//+d.positive, // cast null => 0 !!!
+                            numberPosts: +d.created_utc,
+                            company: company[i]
+                        };
+                    });
+                    fileComp.forEach(element => {
+                        dataSentimentWeek.push(element);
+                    });
+                }
+
+
+                //----------------------TEMPORAL FILTERING--------------------------//
+                var maxDateMarket = d3.max(data, function (c) {
+                    return c.date;
+                })
+                var minDateMarket = d3.min(data, function (c) {
+                    return c.date;
+                })
+                var maxDateSentiment = d3.max(dataSentimentWeek, function (c) {
+                    return c.date;
+                })
+                var minDateSentiment = d3.min(dataSentimentWeek, function (c) {
+                    return c.date;
+                })
+                var maxDate = d3.min([maxDateMarket, maxDateSentiment]) // edit d3.max or d3.min depending on what you want to see
+                var minDate = d3.max([minDateMarket, minDateSentiment])
+
+                data = data.filter(function (c) {
+                    return (c.date <= maxDate) && (c.date >= minDate)
+                })
+                dataSentimentWeek = dataSentimentWeek.filter(function (c) {
+                    return (c.date <= maxDate) && (c.date >= minDate)
+                })
+
+                dataZoom = data;
+                dataSentimentWeekZoom = dataSentimentWeek;
+                // ---------------------- SELECTED TICKERS ----------------------//
+                var isSelected = company.map(function (name) {
+                    return {
+                        key: name,
+                        value: false
+                    }
+                })
+
+                //-------------------------LINECHART-----------------------------//
+                //-----------------------------SVG------------------------------//
+                var color = d3.scaleOrdinal(d3.schemeCategory10);
+                var margin = { top: 50, right: 300, bottom: 50, left: 100 }
+                    , width = 1200 - margin.left - margin.right
+                    , height = 600 - margin.top - margin.bottom;
+
+                var svg = d3.select("#container").append("svg")
+                    .attr("width", width + margin.left + margin.right)
+                    .attr("height", height + margin.top + margin.bottom)
+                    .append("g")
+                    .attr("transform", "translate(150," + margin.top + ")")
+
+                const xScale = d3.scaleTime().range([0, width]);
+                const yScale = d3.scaleLinear().range([height, 0]);
+
+                const yaxis = d3.axisLeft()
+                    .scale(yScale);
+
+                const xaxis = d3.axisBottom()
+                    .tickFormat(d3.timeFormat('%b %y'))
+                    .scale(xScale);
+
+                // X axis
+                gX = svg.append("g")
+                    .attr("class", "Xaxis")
+                    .attr("transform", "translate(0," + height + ")")
+                    .call(xaxis);
+
+                svg.append("text")
+                    .attr("x", width / 2)
+                    .attr("y", height + 40)
+                    .attr("font-family", "sans-serif")
+                    .attr("font-size", "12px")
+                    .text("Year");
+
+                // Y axis
+                svg.append("g")
+                    .attr("class", "Yaxis")
+                    .call(yaxis);
+
+                svg.append("text")
+                    .attr("class", "YaxisText")
+                    .attr("transform", "rotate(-90)")
+                    .attr("x", - 250)
+                    .attr("y", - 80)
+                    .attr("font-family", "sans-serif")
+                    .attr("font-size", "12px")
+                    .text("open");
+
+                const yScaleSentiment = d3.scaleLinear().range([height, 0]);
+
+                const yaxisS = d3.axisRight()
+                    .scale(yScaleSentiment);
+
+
+                // Y axis
+                svg.append("g")
+                    .attr("class", "YaxisS")
+                    .attr("transform", "translate( " + width + ", 0 )")
+                    .call(yaxisS);
+
+                svg.append("text")
+                    .attr("class", "YaxisSText")
+                    .attr("transform", "rotate(-90)")
+                    .attr("x", -270)
+                    .attr("y", width + 60)
+                    .attr("font-family", "sans-serif")
+                    .attr("font-size", "12px")
+                    .text("sentiment");
+
+                // Title
+                svg.append("text")
+                    .attr("x", 350)
+                    .attr("y", -10)
+                    .attr("font-family", "sans-serif")
+                    .attr("font-size", "16px")
+                    .attr("font-weight", "bold")
+                    .style("text-anchor", "middle")
+                    .text("Stock Market and Reddit Sentiment Evolution");
+
+                // Line
+                const line = d3.line()
+                    .x(function (d) { return xScale(d.date); })
+                    .y(function (d) { return yScale(d.field); });
+
+                const lineSentiment = d3.line()
+                    .x(function (d) { return xScale(d.date); })
+                    .y(function (d) { return yScaleSentiment(d.field); });
+
+
+                //---------------------ZOOM AXIS-----------------------------------//
+                // https://stackoverflow.com/questions/48128468/d3-transform-rescale-x-jumps-to-right
+                var zoom = d3.zoom()
+                    .scaleExtent([1, 10])
+                    .translateExtent([[0, 0], [width - margin.left - margin.right, Infinity]])
+                    .extent([[0, 0], [width - margin.left - margin.right, height]])
+                    .on("zoom", zoomed)
+                svg.call(zoom);
+                function zoomed() {
+                    gX.call(xaxis.scale(d3.event.transform.rescaleX(xScale)));
+                    var new_x = d3.event.transform.rescaleX(xScale);
+                    minDate = new_x.domain()[0];
+                    maxDate = new_x.domain()[1];
+                    console.log(minDate)
+                    console.log(maxDate)
+
+                    dataZoom = data.filter(function (c) {
+                        return (c.date <= maxDate) && (c.date >= minDate)
+                    })
+                    dataSentimentWeekZoom = dataSentimentWeek.filter(function (c) {
+                        return (c.date <= maxDate) && (c.date >= minDate)
+                    })
+
+                    update();
+                }
+
+                //-------------------SENTIMENT GRADIENT----------------------------//
+                // https://www.d3-graph-gallery.com/graph/line_color_gradient_svg.html
+                svg.append("linearGradient")
+                    .attr("id", "line-gradient")
+                    .attr("gradientUnits", "userSpaceOnUse")
+                    .attr("x1", 0)
+                    .attr("y1", yScaleSentiment(0))
+                    .attr("x2", 0)
+                    .attr("y2", yScaleSentiment(1))
+                    .selectAll("stop")
+                    .data([
+                        { offset: "0%", color: "darkred" },
+                        { offset: "20%", color: "red" },
+                        { offset: "40%", color: "gray" },
+                        { offset: "60%", color: "green" },
+                        { offset: "80%", color: "lightgreen" },
+                    ])
+                    .enter().append("stop")
+                    .attr("offset", function (d) { return d.offset; })
+                    .attr("stop-color", function (d) { return d.color; });
+
+                //----------------------LEGEND GRADIENT--------------------------------//
+                const barHeight = 150;
+                const yScaleSentimentLegend = d3.scaleLinear().range([barHeight, 0]);
+                var axisLegendG = d3.axisRight(yScaleSentimentLegend)
+                    .tickSize(16)
+                    .tickValues([1, 0.5, 0])
+                    .tickFormat(function (d) {
+                        if (d === 1) return "Positive";
+                        if (d === 0) return "Negative";
+                        else return "Neutral";
+                    });
+
+                var legendG = svg.append("g")
+                    .attr("class", "legendG")
+                    .attr("transform", "translate(" + (width + 80) + "," + (height / 2 + 80) + ")rotate(-90)");
+
+                var defs = svg.append("defs");
+                var linearGradient = defs.append("linearGradient").attr("id", "myGradient");
+
+                linearGradient.selectAll("stop")
+                    .data([
+                        { offset: "0%", color: "darkred" },
+                        { offset: "20%", color: "red" },
+                        { offset: "40%", color: "gray" },
+                        { offset: "60%", color: "green" },
+                        { offset: "80%", color: "lightgreen" },
+                    ])
+                    .enter().append("stop")
+                    .attr("offset", function (d) { return d.offset; })
+                    .attr("stop-color", function (d) { return d.color; });
+
+                legendG.append("rect")
+                    .attr("width", barHeight)
+                    .attr("height", 10)
+                    .style("fill", "url(#myGradient)");
+
+                legendG.append("g")
+                    .call(axisLegendG)
+                    .attr("transform", "translate(" + barHeight + ",0)rotate(90)");
+
+                //---------------------------LEGEND NB POST-----------------------------//
+                svg.append('rect')
+                    .attr("class", "rect-legendPost")
+                    .attr('x', width + 45)
+                    .attr('y', 20)
+                    .attr('width', 10)
+                    .attr('height', 10)
+                    .style('fill', 'blue');
+
+                svg.append('text')
+                    .attr("class", "text-legendPost")
+                    .attr('x', width + 65)
+                    .attr('y', 26)
+                    .text("Number of posts per week")
+                    .attr("font-family", "sans-serif")
+                    .attr("font-size", "12px")
+                    .style("text-anchor", "start")
+                    .style("dominant-baseline", "middle")
+                    .style('fill', 'blue')
+
+                //----------------------------SELECT COMPANY----------------------------//
+                //default value
+                var selectedCompany = company[0]
+                //updateCompany(selectedCompany);
+                // enter code to append the game options to the dropdown
+                d3.select("#dropdownCompany")
+                    .selectAll("options")
+                    .data(company)
+                    .enter()
+                    .append("option")
+                    .text(function (d) { return d; }) // text showed in the menu
+                    .attr("value", function (d) { return d; }) // corresponding key
+
+                // event listener for the dropdown
+                d3.select("#dropdownCompany").on("change", function (d) {
+                    selectedCompany = this.value;
+                    update();
+                })
+
+                //----------------------------SELECT FIELD----------------------------//
+                //default value
+                var selectedField = fields[0]
+                // enter code to append the game options to the dropdown
+                d3.select("#dropdown")
+                    .selectAll("options")
+                    .data(fields)
+                    .enter()
+                    .append("option")
+                    .text(function (d) { return d; }) // text showed in the menu
+                    .attr("value", function (d) { return d; }) // corresponding key
+
+                // event listener for the dropdown
+                d3.select("#dropdown").on("change", function (d) {
+                    selectedField = this.value;
+                    update();
+                })
+
+                //----------------------------SELECT SENTIMENT----------------------------//
+                //default value
+                var selectedSentimentMarker = sentimentMarkers[0]
+                // enter code to append the game options to the dropdown
+                d3.select("#dropdownSentiment")
+                    .selectAll("options")
+                    .data(sentimentMarkers)
+                    .enter()
+                    .append("option")
+                    .text(function (d) { return d; }) // text showed in the menu
+                    .attr("value", function (d) { return d; }) // corresponding key
+
+                // event listener for the dropdown
+                d3.select("#dropdownSentiment").on("change", function (d) {
+                    selectedSentimentMarker = this.value;
+                    update();
+                })
+
+                function getSelectedMin(b) {
+                    return d3.min(b, function (c) {
+                        return d3.min(c.values, function (d) {
+                            return d.field;
+                        });
+                    })
+                }
+
+                function getSelectedMax(b) {
+                    return d3.max(b, function (c) {
+                        return d3.max(c.values, function (d) {
+                            return d.field;
+                        });
+                    })
+                }
+
+                function update() {
+                    //---------------------NEST------------------------------------//
+                    dataSentimentWeekZoomMap = dataSentimentWeekZoom.map(function (d) {
+                        if (selectedSentimentMarker == sentimentMarkers[0]) {
+                            if (d.averageSentiment) {
+                                return {
+                                    date: d.date,
+                                    field: d.averageSentiment,
+                                    company: d.company
+                                }
+                            }
+                            return {}
+                        }
+                        if (selectedSentimentMarker == sentimentMarkers[1]) {
+                            return {
+                                date: d.date,
+                                field: d.numberPosts,
+                                company: d.company
+                            }
+                        }
+                    })
+
+                    var nestedSentimentDailyData = d3.nest()
+                        .key(function (d) {
+                            return d.company
+                        })
+                        .entries(dataSentimentWeekZoomMap)
+
+                    dataFilter = dataZoom.map(function (d) {
+                        return {
+                            date: d.date,
+                            field: d[selectedField],
+                            company: d.company
+                        }
+                    })
+
+                    nestedData = d3.nest()
+                        .key(function (d) {
+                            return d["company"];
+                        })
+                        .entries(dataFilter);
+
+                    nestedDataSelected = nestedData.filter(d => (d.key === selectedCompany))//[0]
+                    nestedSentimentDailyDataSelected = nestedSentimentDailyData.filter(d => (d.key === selectedCompany))//[0]
+
+                    //-----------------------------SCALES-----------------------------//
+
+                    xScale.domain([minDate, maxDate]);
+                    svg.selectAll(".Xaxis").transition()
+                        .duration(1000)
+                        .call(xaxis);
+
+
+                    yScale.domain([getSelectedMin(nestedDataSelected), getSelectedMax(nestedDataSelected)]);
+                    svg.selectAll(".Yaxis")
+                        .transition()
+                        .duration(1000)
+                        .call(yaxis);
+
+                    svg.selectAll(".YaxisText")
+                        .transition()
+                        .duration(1000)
+                        .text(selectedField);
+
+                    var maxSentiment = d3.max([1.0, d3.max(nestedSentimentDailyDataSelected[0].values, function (d) {
+                        return d.field
+                    })])
+                    yScaleSentiment.domain([0, maxSentiment])
+                    svg.selectAll(".YaxisS")
+                        .transition()
+                        .duration(1000)
+                        .call(yaxisS);
+
+                    svg.selectAll(".YaxisSText")
+                        .transition()
+                        .duration(1000)
+                        .text(selectedSentimentMarker);
+
+                    //----------------------------LINES-----------------------------//
+                    var u = svg.selectAll(".line")
+                        .data(nestedDataSelected);
+
+                    u.enter()
+                        .append("path")
+                        .attr('id', function (d) { return 'line-' + d.key })
+                        .attr("visibility", "visible")
+                        .attr("class", "line")
+                        .merge(u)
+                        .transition()
+                        .duration(1000)
+                        .attr("d", function (d) {
+                            return line(d.values);
+                        })
+                        .attr("fill", "none")
+                        .attr("stroke", "black")
+                        .attr("stroke-width", 1.5);
+
+                    var uS = svg.selectAll(".lineS")
+                        .data(nestedSentimentDailyDataSelected)
+
+                    uS.enter()
+                        .append("path")
+                        .attr('id', function (d) { return 'lineS-' + d.key })
+                        .attr("visibility", "visible")
+                        .attr("class", "lineS")
+                        .merge(uS)
+                        .transition()
+                        .duration(1000)
+                        .attr("stroke-width", 1.5)
+                        .attr("d", function (d) {
+                            return lineSentiment(d.values);
+                        })
+                        .attr("fill", "none");
+
+                    if (selectedSentimentMarker == sentimentMarkers[0]) {
+                        svg.selectAll(".lineS").attr("stroke", "url(#line-gradient)")
+                        svg.selectAll(".legendG").attr("visibility", "visible")
+                        svg.selectAll(".rect-legendPost").attr("visibility", "hidden")
+                        svg.selectAll(".text-legendPost").attr("visibility", "hidden")
+                    }
+                    if (selectedSentimentMarker == sentimentMarkers[1]) {
+                        svg.selectAll(".lineS").attr("stroke", "blue")
+                        svg.selectAll(".legendG").attr("visibility", "hidden")
+                        svg.selectAll(".rect-legendPost").attr("visibility", "visible")
+                        svg.selectAll(".text-legendPost").attr("visibility", "visible")
+                    }
+
+                    //--------------------------CURSOR-----------------------------//
+                    // https://bl.ocks.org/larsenmtl/e3b8b7c2ca4787f77d78f58d41c3da91
+
+                    mouseG.append("path") // this is the black vertical line to follow mouse
+                        .attr("class", "mouse-line")
+                        .style("stroke", "black")
+                        .style("stroke-width", "1px")
+                        .style("opacity", 0);
+
+                    var linesCursor = document.getElementsByClassName('line');
+
+                    var mousePerLine = mouseG.selectAll('.mouse-per-line')
+                        .data(nestedDataSelected)
+                        .enter()
+                        .append("g")
+                        .attr("class", "mouse-per-line");
+
+                    mousePerLine.append("circle")
+                        .attr('id', function (d) { return 'circleCursor-' + d.key })
+                        .attr("r", 7)
+                        .style("stroke", "red")
+                        .style("stroke-width", "1px")
+                        .style("fill", "none");
+
+                    mousePerLine.append("text")
+                        .attr('id', function (d) { return 'textCursor-' + d.key })
+                        .attr("transform", "translate(10,3)")
+                        .attr("font-family", "sans-serif")
+                        .style("stroke", "red")
+                        .attr("font-size", "11px");
+
+                    mouseG.append('svg:rect') // append a rect to catch mouse movements on canvas
+                        .attr('width', width) // can't catch mouse events on a g element
+                        .attr('height', height)
+                        .attr('fill', 'none')
+                        .attr('pointer-events', 'all')
+                        .on('mouseout', function () { // on mouse out hide line, circles and text
+                            d3.select(".mouse-line")
+                                .style("opacity", "0");
+                            d3.selectAll(".mouse-per-line circle")
+                                .style("opacity", "0");
+                            d3.selectAll(".mouse-per-line text")
+                                .style("opacity", "0");
+                        })
+                        .on('mouseover', function () { // on mouse in show line, circles and text
+                            d3.select(".mouse-line")
+                                .style("opacity", "1");
+                            d3.selectAll(".mouse-per-line circle")
+                                .style("opacity", "1");
+                            d3.selectAll(".mouse-per-line text")
+                                .style("opacity", "1");
+                        })
+                        .on('mousemove', function () { // mouse moving over canvas
+                            var mouse = d3.mouse(this);
+                            d3.select(".mouse-line")
+                                .attr("d", function () {
+                                    var d = "M" + mouse[0] + "," + height;
+                                    d += " " + mouse[0] + "," + 0;
+                                    return d;
+                                });
+
+                            d3.selectAll(".mouse-per-line")
+                                .attr("transform", function (d, i) {
+                                    var xDate = xScale.invert(mouse[0]),
+                                        bisect = d3.bisector(function (d) { return d.date; }).right;
+                                    idx = bisect(d.values, xDate);
+
+                                    if (i >= linesCursor.length) {
+                                        return ''
+                                    }
+                                    var beginning = 0,
+                                        end = linesCursor[i].getTotalLength(),
+                                        target = null;
+
+                                    while (true) {
+                                        target = Math.floor((beginning + end) / 2);
+                                        pos = linesCursor[i].getPointAtLength(target);
+                                        if ((target === end || target === beginning) && pos.x !== mouse[0]) {
+                                            break;
+                                        }
+                                        if (pos.x > mouse[0]) end = target;
+                                        else if (pos.x < mouse[0]) beginning = target;
+                                        else break; //position found
+                                    }
+
+                                    d3.select(this).select('text')
+                                        .text(yScale.invert(pos.y).toFixed(2));
+
+                                    return "translate(" + mouse[0] + "," + pos.y + ")";
+                                });
+                        });
+
+                    //--------------------------LEGEND-----------------------------//        
+                    txt.text(selectedCompany)
+                }
+
+                //--------------------------CURSOR-----------------------------//
+                // https://bl.ocks.org/larsenmtl/e3b8b7c2ca4787f77d78f58d41c3da91
+                var mouseG = svg.append("g")
+                    .attr("class", "mouse-over-effects");
+
+                //--------------------------LEGEND-----------------------------//        
+                svg.append('rect')
+                    .attr('x', width + 45)
+                    .attr('y', 0)
+                    .attr('width', 10)
+                    .attr('height', 10)
+                    .style('fill', 'black');
+
+                txt = svg.append('text')
+                    .attr("class", "text-legend")
+                    .attr('x', width + 65)
+                    .attr('y', 6)
+                    .text(selectedCompany)
+                    .attr("font-family", "sans-serif")
+                    .attr("font-size", "12px")
+                    .style("text-anchor", "start")
+                    .style("dominant-baseline", "middle")
+                    .style('fill', 'black')
+
+                //-------------------------CALL UPDATE------------------------//
+                update();
+            })
+
+    </script>
+
+</body>
+
+</html>
