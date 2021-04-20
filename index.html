@@ -28,7 +28,7 @@
 
 <body>
     <p>
-        Select a field:
+        Select a stock data metric:
         <select id="dropdown"></select>
     </p>
     <p>
@@ -49,7 +49,7 @@
         //-----------------------------DATA-----------------------------//
         const company = ["AAPL", "AMZN", "BABA", "DIS", "FB", "GME", "MSFT", "NTFX", "NVDA", "T", "TSLA", "V", "WMT"];
         const fields = ["open", "low", "high", "close", "volume"];
-        const sentimentMarkers = ["NLP", "Number of posts per week"]
+        const sentimentMarkers = ["Sentiment analysis per week", "Number of posts per week"]
         const timeConv = d3.timeParse("%Y-%m-%d");
         const files = ["/stockData_csv/AAPL.csv",
             "/stockData_csv/AMZN.csv",
@@ -271,29 +271,29 @@
 
                 //---------------------ZOOM AXIS-----------------------------------//
                 // https://stackoverflow.com/questions/48128468/d3-transform-rescale-x-jumps-to-right
-                var zoom = d3.zoom()
-                    .scaleExtent([1, 10])
-                    .translateExtent([[0, 0], [width - margin.left - margin.right, Infinity]])
-                    .extent([[0, 0], [width - margin.left - margin.right, height]])
-                    .on("zoom", zoomed)
-                svg.call(zoom);
-                function zoomed() {
-                    gX.call(xaxis.scale(d3.event.transform.rescaleX(xScale)));
-                    var new_x = d3.event.transform.rescaleX(xScale);
-                    minDate = new_x.domain()[0];
-                    maxDate = new_x.domain()[1];
-                    console.log(minDate)
-                    console.log(maxDate)
+                //var zoom = d3.zoom()
+                //    .scaleExtent([1, 10])
+                //    .translateExtent([[0, 0], [width - margin.left - margin.right, Infinity]])
+                //    .extent([[0, 0], [width - margin.left - margin.right, height]])
+                //    .on("zoom", zoomed)
+                //svg.call(zoom);
+                //function zoomed() {
+                //    gX.call(xaxis.scale(d3.event.transform.rescaleX(xScale)));
+                //    var new_x = d3.event.transform.rescaleX(xScale);
+                //    minDate = new_x.domain()[0];
+                //    maxDate = new_x.domain()[1];
+                //    console.log(minDate)
+                //    console.log(maxDate)
 
-                    dataZoom = data.filter(function (c) {
-                        return (c.date <= maxDate) && (c.date >= minDate)
-                    })
-                    dataSentimentWeekZoom = dataSentimentWeek.filter(function (c) {
-                        return (c.date <= maxDate) && (c.date >= minDate)
-                    })
+                //    dataZoom = data.filter(function (c) {
+                //        return (c.date <= maxDate) && (c.date >= minDate)
+                //    })
+                //    dataSentimentWeekZoom = dataSentimentWeek.filter(function (c) {
+                //        return (c.date <= maxDate) && (c.date >= minDate)
+                //    })
 
-                    update();
-                }
+                //    update();
+                //}
 
                 //-------------------SENTIMENT GRADIENT----------------------------//
                 // https://www.d3-graph-gallery.com/graph/line_color_gradient_svg.html
